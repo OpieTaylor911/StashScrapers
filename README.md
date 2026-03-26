@@ -1,24 +1,33 @@
-# Template for creating Stash scrapers source index
+# OpieTaylor911 Stash Scrapers
 
-This template allows you to create a new repository with a few clicks with preconfigured GitHub action to publish your scrapers source index. 
-_This assumes you already know how to create scrapers for Stash. If you don't, first read [this](https://docs.stashapp.cc/in-app-manual/scraping/scraperdevelopment/)._
+Custom scrapers for Stash, published as a source index for in-app installation.
 
-## How to use it?
+## Source Index URL
 
-1. Click **Use this template** > **Create a new repository**. 
-1. Choose a repository name and click **Create repository**.
-1. Open **Settings** and head to **Pages**.
-1. Under Build and deployment select the Source as GitHub Actions.
+Use this in Stash:
 
-Now add your scrapers to [scrapers](/scrapers) directory and they will be automatically published to the source index.
+https://opietaylor911.github.io/StashScrapers/main/index.yml
 
-Source index URL: [`https://<your-username>.github.io/<repository-name>/main/index.yml`](https://<your-username>.github.io/<repository-name>/main/index.yml)
+## Status
 
-## Share your scrapers
+Current scraper set:
 
-- [Create a new topic](https://discourse.stashapp.cc/t/-/146) for your scraper on the community forum.
-- [Add your source index to the list](https://discourse.stashapp.cc/t/-/834) on the Stash community forum.
+- AEBN (`scrapers/AEBN.yml`)
+
+## Enable GitHub Pages (required)
+
+If the source URL returns 404, enable Pages deployment:
+
+1. Open repository **Settings**.
+2. Go to **Pages**.
+3. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+4. Push any change under `scrapers/**` (already done for AEBN) or run the deploy workflow manually.
+
+## Add More Scrapers
+
+Drop new scraper files under `scrapers/` and push to `main`.
+The workflow builds zip artifacts and regenerates the source index automatically.
 
 ## License
 
-The default license is set to [AGPL-3.0](/LICENCE). Before publishing any scrapers you can change it.
+AGPL-3.0. See [LICENCE](LICENCE).
