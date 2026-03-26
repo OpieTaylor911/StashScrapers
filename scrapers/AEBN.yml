@@ -1,0 +1,215 @@
+name: AEBN
+# AEBN movie-page scraper focused on gay catalog pages.
+# Supports:
+# - sceneByURL (movie pages)
+# - groupByURL (movie pages)
+# - sceneByName / groupByName (search)
+#
+# Notes:
+# - Uses mobile pages because HTML is simpler and consistent.
+# - Scene scrape pulls: first scene image, categories as tags, stars as performers, studio.
+# - Group scrape pulls: cover image, categories as tags, studio.
+# - Stash handles creating missing tags/performers/studios when scraping if configured.
+
+sceneByURL:
+  - action: scrapeXPath
+    url:
+      - m.aebn.net/movie/
+      - gay.aebn.com/gay/movies/
+    scraper: movieSceneScraper
+
+groupByURL:
+  - action: scrapeXPath
+    url:
+      - m.aebn.net/movie/
+      - gay.aebn.com/gay/movies/
+    scraper: movieGroupScraper
+
+sceneByName:
+  action: scrapeXPath
+  queryURL: https://m.aebn.net/search/movies?theaterId=842&genreId=102&locale=en&searchString={}
+  scraper: movieSearchScraper
+
+groupByName:
+  action: scrapeXPath
+  queryURL: https://m.aebn.net/search/movies?theaterId=842&genreId=102&locale=en&searchString={}
+  scraper: movieSearchGroupScraper
+
+sceneByQueryFragment:
+  action: scrapeXPath
+  queryURL: "{url}"
+  scraper: movieSceneScraper
+
+groupByQueryFragment:
+  action: scrapeXPath
+  queryURL: "{url}"
+  scraper: movieGroupScraper
+
+xPathScrapers:
+  movieSearchScraper:
+    common:
+      $rows: //div[contains(@class,"gridContainer")]//a[contains(@href,"/movie/")][.//img[@alt]]
+    scene:
+      Title: $rows//img/@alt
+      URL:
+        selector: $rows/@href
+        postProcess:
+          - replace:
+              - regex: ^
+                with: https://m.aebn.net
+              - regex: \?.*$
+                with: ""
+      Image:
+        selector: $rows//img/@onload
+        postProcess:
+          - replace:
+              - regex: ^.*\['([^']+)'.*$
+                with: $1
+
+  movieSearchGroupScraper:
+    common:
+      $rows: //div[contains(@class,"gridContainer")]//a[contains(@href,"/movie/")][.//img[@alt]]
+    group:
+      Name: $rows//img/@alt
+      URL:
+        selector: $rows/@href
+        postProcess:
+          - replace:
+              - regex: ^
+                with: https://m.aebn.net
+              - regex: \?.*$
+                with: ""
+      FrontImage:
+        selector: $rows//img/@onload
+        postProcess:
+          - replace:
+              - regex: ^.*\['([^']+)'.*$
+                with: $1
+
+  movieSceneScraper:
+    scene:
+      Title:
+        selector: //title/text() | //h1[1]/text() | //meta[@property="og:title"]/@content
+        concat: ""
+        postProcess:
+          - replace:
+              - regex: \s+-\s+AEBN$
+                with: ""
+      URL:
+        selector: //meta[@property="og:url"]/@content | //link[@rel="canonical"]/@href
+        concat: ""
+        postProcess:
+          - replace:
+              - regex: \?.*$
+                with: ""
+      Image:
+        selector: concat((//img[contains(@src,"/BoxCovers/")][1]/@src | //meta[@property="og:image"]/@content)[1], "|", (//div[contains(@class,"movie-detail-scene-section")]//div[contains(@class,"scroller")][1]/@data-movie-id)[1], "|", (//div[contains(@class,"movie-detail-scene-section")]//div[contains(@class,"scroller")][1]/@data-time-start)[1])
+        postProcess:
+          - javascript: |
+              const [cover, movieId, startTimeRaw] = value.split("|").map(part => part.trim());
+              const startTime = Number.parseInt(startTimeRaw, 10);
+              if (!movieId || Number.isNaN(startTime)) {
+                return cover || "";
+              }
+
+              const firstImageIndex = Math.ceil((startTime + 5) / 10);
+              return `https://pic.aebn.net/dis/t/${movieId}/${movieId}_${String(firstImageIndex).padStart(8, "0")}.jpg?s=180h`;
+      Studio:
+        Name:
+          selector: //a[contains(@href,"/search/movies/studio/")]/text()
+          concat: ", "
+          postProcess:
+            - javascript: |
+                const parts = value.split(",").map(s => s.trim()).filter(Boolean);
+                return parts.length ? parts[parts.length - 1] : value.trim();
+      Tags:
+        Name: //a[contains(@href,"/search/movies/category/")]/text()
+      Performers:
+        Name:
+          selector: //div[not(@class) and contains(normalize-space(.),"Starring ")]/text()
+          postProcess:
+            - javascript: |
+                const text = value.replace(/\s+/g, " ").trim();
+                const match = text.match(/\bStarring\s+(.+?)(?=(?:,?\s+it[’']s\b)|(?:[.!?]\s+[A-Z])|$)/i);
+                if (!match) {
+                  return "";
+                }
+
+                let cast = match[1].replace(/\s+and\s+/gi, ", ");
+                cast = cast.replace(/,\s*(?:a|an|another|\d+)\b.*$/i, "");
+                cast = cast.replace(/\b[aA]\s+dozen\b.*$/i, "");
+
+                const names = cast
+                  .split(",")
+                  .map(name => name.trim())
+                  .filter(name => /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+)+$/.test(name));
+
+                return [...new Set(names)].join(",");
+          split: ","
+      Date:
+        selector: //span[contains(@class,"info-content") and preceding-sibling::span[contains(@class,"info-label") and contains(normalize-space(.),"Released")]][1]/text()
+        concat: ""
+        postProcess:
+          - replace:
+              - regex: '.*((19|20)\d{2}).*'
+                with: $1-01-01
+
+      Groups:
+        Name:
+          selector: //h1[1]/text() | //meta[@property="og:title"]/@content
+          concat: ""
+        URL:
+          selector: //meta[@property="og:url"]/@content | //link[@rel="canonical"]/@href
+          concat: ""
+
+  movieGroupScraper:
+    group:
+      Name:
+        selector: //title/text() | //h1[1]/text() | //meta[@property="og:title"]/@content
+        concat: ""
+        postProcess:
+          - replace:
+              - regex: \s+-\s+AEBN$
+                with: ""
+      URL:
+        selector: //meta[@property="og:url"]/@content | //link[@rel="canonical"]/@href
+        concat: ""
+        postProcess:
+          - replace:
+              - regex: \?.*$
+                with: ""
+      FrontImage:
+        selector: //img[contains(@src,"/BoxCovers/")][1]/@src | //meta[@property="og:image"]/@content
+        concat: ""
+      Studio:
+        Name:
+          selector: //a[contains(@href,"/search/movies/studio/")]/text()
+          concat: ", "
+          postProcess:
+            - javascript: |
+                const parts = value.split(",").map(s => s.trim()).filter(Boolean);
+                return parts.length ? parts[parts.length - 1] : value.trim();
+      Tags:
+        Name: //a[contains(@href,"/search/movies/category/")]/text()
+      Date:
+        selector: //span[contains(@class,"info-content") and preceding-sibling::span[contains(@class,"info-label") and contains(normalize-space(.),"Released")]][1]/text()
+        concat: ""
+        postProcess:
+          - replace:
+              - regex: '.*((19|20)\d{2}).*'
+                with: $1-01-01
+
+driver:
+  cookies:
+    - CookieURL: "https://m.aebn.net"
+      Cookies:
+        - Name: "ageConfirmed"
+          Domain: "m.aebn.net"
+          Value: "true"
+          Path: "/"
+    - CookieURL: "https://gay.aebn.com"
+      Cookies:
+        - Name: "ageConfirmed"
+          Domain: "gay.aebn.com"
+          Value: "true"
+          Path: "/"
